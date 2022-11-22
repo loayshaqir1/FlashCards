@@ -5,15 +5,15 @@ dotenv.config({ path: './config.env' });
 const uri = process.env.DATABASE.replace('<password>', process.env.DATABASE_PASSWORD);
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
 
-async function connect(){
-    try{
+async function connect() {
+    try {
         await client.connect();
         return client.db("FlashCards");
-    }catch(err){
+    } catch (err) {
         console.log(`Error: ${err}`);
-    }finally{
+    } finally {
         //
     }
 }
 
-module.exports = {connect};
+module.exports = { connect };
