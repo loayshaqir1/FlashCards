@@ -1,32 +1,26 @@
 const dotenv = require('dotenv');
 const { json } = require('express');
 const express = require('express');
-const app = express();
-app.use(express.json());
 const server = require('./server');
 
 dotenv.config({ path: './config.env' });
+
+const DB = server.connect();
+const usersCollection = DB.collection("users");
+const wordsCollection = DB.collection("words");
+const app = express();
+app.use(express.json());
 app.listen(process.env.PORT);
 //---------------------------------------------------------------------------------------------------------------------
 app.get('/', async (req, res) => {
-    const DB = await server.connect();
-    const run_first = await addTenRandomUsers(DB.collection("users"), DB.collection("words"));
+    const run_first = await addTenRandomUsers();
     if (run_first) {
-        const tenWords = await getTenWordsForUser('Henry', 5, DB.collection("users"), DB.collection("words"));
-        if (tenWords) {
-            console.log(tenWords);
-            let words = []
-            tenWords.forEach(word => {
-                words.push(word);
-                words.push('                                                                                                                                                                                                                                                                                                                                                                                                          ');
-                words.push('                                                                                                                                                                                                                                                                                                                                                                                                          ');
-            });
-            res.json(words);
-        }
+        const tenWords = await getTenWordsForUser('Henry', 5);
+        res.json(tenWords);
     }
 });
 //---------------------------------------------------------------------------------------------------------------------
-async function getTenWordsForUser(username, level, usersCollection, wordsCollection) {
+async function getTenWordsForUser(username, level) {
     const filter = { 'Name': username };
     document = await usersCollection.findOne(filter);
     if (document != null) {
@@ -40,7 +34,7 @@ async function getTenWordsForUser(username, level, usersCollection, wordsCollect
         // console.log(mergedArray);
         if (mergedArray.length >= 10) {
             //try to choose 5 words that he didn't saw before
-            let unseen_words = await getUpToNumberUnseenWords(level, document, wordsCollection, 5, usersCollection, filter);
+            let unseen_words = await getUpToNumberUnseenWords(level, document, 5, filter);
             let remaining = 10 - unseen_words.length;
             //choose remaining random words from merged Array
             let chosen_words = [];
@@ -61,7 +55,7 @@ async function getTenWordsForUser(username, level, usersCollection, wordsCollect
             let final_words = await unseen_words.concat(chosen_words);
             return final_words;
         } else {
-            let unseen_words = await getUpToNumberUnseenWords(level, document, wordsCollection, 10 - mergedArray.length, usersCollection, filter);
+            let unseen_words = await getUpToNumberUnseenWords(level, document, 10 - mergedArray.length, filter);
             chosen_words_ids = [];
             let chosen_words = [];
             mergedArray.forEach(word => {
@@ -77,7 +71,7 @@ async function getTenWordsForUser(username, level, usersCollection, wordsCollect
     //if its the first time for the user
     else {
         //Add the new user to the usersCollection
-        await addUserToCollection(username, usersCollection);
+        await addUserToCollection(username);
         // create a filter to select the documents
         const filter = { lesson: { $lte: level } };
         let chosen_words = []
@@ -104,9 +98,8 @@ async function getTenWordsForUser(username, level, usersCollection, wordsCollect
 }
 //---------------------------------------------------------------------------------------------------------------------
 //@@ make choosing the words from Groups B,C,D more fair
-//@@ make the words collection and users collection Global
 //---------------------------------------------------------------------------------------------------------------------
-async function getUpToNumberUnseenWords(level, user_document, wordsCollection, number, usersCollection, nameFilter) {
+async function getUpToNumberUnseenWords(level, user_document, number, nameFilter) {
     const filter = {
         $and: [
             { lesson: { $lte: level } },
@@ -176,7 +169,7 @@ async function getPossibleWordsFromDatedGroups(level, groupArray, minDays) {
     return result;
 }
 //---------------------------------------------------------------------------------------------------------------------
-async function addWordsToUser(username, usersCollection, wordsCollection) {
+async function addWordsToUser(username) {
     const filter = { 'Name': username };
     document = await usersCollection.findOne(filter);
     let word1 = await getRandomWord(wordsCollection);
@@ -195,7 +188,7 @@ async function addWordsToUser(username, usersCollection, wordsCollection) {
     await usersCollection.updateOne(filter, update);
 }
 //---------------------------------------------------------------------------------------------------------------------
-async function addTenRandomUsers(usersCollection, wordsCollection) {
+async function addTenRandomUsers() {
     const names = [
         "Henry",
         "Richard",
@@ -212,11 +205,11 @@ async function addTenRandomUsers(usersCollection, wordsCollection) {
     document = await usersCollection.findOne(filter);
     if (document == null) {
         for (let i = 0; i < 3; i++) {
-            await addUserToCollection(names[i], usersCollection);
+            await addUserToCollection(names[i]);
         }
         for (let i = 0; i < 3; i++) {
             for (let j = 0; j < 5; j++) {
-                await addWordsToUser(names[i], usersCollection, wordsCollection);
+                await addWordsToUser(names[i]);
             }
             return 1;
         }
@@ -236,9 +229,9 @@ function getCurrentDate() {
     return dateString;
 }
 //---------------------------------------------------------------------------------------------------------------------
-function addUserToCollection(username, collection) {
+function addUserToCollection(username) {
     // check if the collection exists
-    if (!collection) {
+    if (!usersCollection) {
         throw new Error("Collection does not exist");
     }
 
@@ -253,7 +246,7 @@ function addUserToCollection(username, collection) {
     };
 
     // add the document to the collection
-    collection.insertOne(document);
+    usersCollection.insertOne(document);
 }
 //---------------------------------------------------------------------------------------------------------------------
 async function getLevel(id, wordsCollection) {
