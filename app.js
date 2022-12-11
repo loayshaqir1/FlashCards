@@ -11,8 +11,15 @@ const wordsCollection = DB.collection("words");
 const app = express();
 app.use(express.json());
 app.listen(process.env.PORT);
+
+
+
 //---------------------------------------------------------------------------------------------------------------------
-app.get('/', async (req, res) => {
+app.put('/?username=name&wordId=id&result=isRight', async (req, res) => {
+
+});
+//---------------------------------------------------------------------------------------------------------------------
+app.get('/?username=name&level=number', async (req, res) => {
     const run_first = await addTenRandomUsers();
     if (run_first) {
         const tenWords = await getTenWordsForUser('Henry', 5);
@@ -22,19 +29,19 @@ app.get('/', async (req, res) => {
 //---------------------------------------------------------------------------------------------------------------------
 async function getTenWordsForUser(username, level) {
     const filter = { 'Name': username };
-    document = await usersCollection.findOne(filter);
-    if (document != null) {
+    user_document = await usersCollection.findOne(filter);
+    if (user_document != null) {
         //This array contains the words that "we can" show to the user
-        let wordsFromA = await getPossibleWordsFromA(level, document);
-        let wordsFromB = await getPossibleWordsFromDatedGroups(level, document.GroupB, 7);
-        let wordsFromC = await getPossibleWordsFromDatedGroups(level, document.GroupC, 14);
-        let wordsFromD = await getPossibleWordsFromDatedGroups(level, document.GroupD, 30);
+        let wordsFromA = await getPossibleWordsFromA(level, user_document);
+        let wordsFromB = await getPossibleWordsFromDatedGroups(level, user_document.GroupB, 7);
+        let wordsFromC = await getPossibleWordsFromDatedGroups(level, user_document.GroupC, 14);
+        let wordsFromD = await getPossibleWordsFromDatedGroups(level, user_document.GroupD, 30);
         let mergedArray = wordsFromA.concat(wordsFromB).concat(wordsFromC).concat(wordsFromD);
         // console.log(mergedArray.length);
         // console.log(mergedArray);
         if (mergedArray.length >= 10) {
             //try to choose 5 words that he didn't saw before
-            let unseen_words = await getUpToNumberUnseenWords(level, document, 5, filter);
+            let unseen_words = await getUpToNumberUnseenWords(level, user_document, 5, filter);
             let remaining = 10 - unseen_words.length;
             //choose remaining random words from merged Array
             let chosen_words = [];
@@ -55,15 +62,24 @@ async function getTenWordsForUser(username, level) {
             let final_words = await unseen_words.concat(chosen_words);
             return final_words;
         } else {
-            let unseen_words = await getUpToNumberUnseenWords(level, document, 10 - mergedArray.length, filter);
+            let unseen_words = await getUpToNumberUnseenWords(level, user_document, 10 - mergedArray.length, filter);
+            let words_without_time_constraint = []
+            if (unseen_words.length + mergedArray.length < 10) {
+                let remaining = 10 - (unseen_words.length + mergedArray.length);
+                words_without_time_constraint = await getRemainingWordsWithoutTimeConstraint(user_document, remaining, mergedArray, level);
+            }
             chosen_words_ids = [];
-            let chosen_words = [];
             mergedArray.forEach(word => {
                 chosen_words_ids.push(word.id);
             });
+            if (words_without_time_constraint.length > 0) {
+                words_without_time_constraint.forEach(word => {
+                    chosen_words_ids.push(word.id);
+                });
+            }
             const idFilter = { id: { $in: chosen_words_ids } };
             const cursor = await wordsCollection.find(idFilter);
-            chosen_words = await cursor.toArray();
+            let chosen_words = await cursor.toArray();
             let final_words = await unseen_words.concat(chosen_words);
             return final_words;
         }
@@ -72,12 +88,12 @@ async function getTenWordsForUser(username, level) {
     else {
         //Add the new user to the usersCollection
         await addUserToCollection(username);
-        // create a filter to select the documents
+        // create a filter to select the user_documents
         const filter = { lesson: { $lte: level } };
         let chosen_words = []
-        // find the documents
-        const documents = await wordsCollection.find(filter);
-        let possible_words = await documents.toArray();
+        // find the user_documents
+        const user_documents = await wordsCollection.find(filter);
+        let possible_words = await user_documents.toArray();
         for (let i = 0; i < 10; i++) {
             // generate a random index in the array
             const index = Math.floor(Math.random() * possible_words.length);
@@ -86,7 +102,7 @@ async function getTenWordsForUser(username, level) {
             chosen_words.push(possible_words.splice(index, 1)[0]);
         }
         const nameFilter = { 'Name': username };
-        document = await usersCollection.findOne(nameFilter);
+        user_document = await usersCollection.findOne(nameFilter);
         chosen_words_ids = [];
         chosen_words.forEach(word => {
             chosen_words_ids.push(word.id);
@@ -98,6 +114,54 @@ async function getTenWordsForUser(username, level) {
 }
 //---------------------------------------------------------------------------------------------------------------------
 //@@ make choosing the words from Groups B,C,D more fair
+async function getRemainingWordsWithoutTimeConstraint(user_document, remaining, already_chosen_words, level) {
+    const filterFunction = (obj) => (obj.lesson <= level && !already_chosen_words.includes(obj));
+    let possible_words = user_document.GroupB.filter(filterFunction);
+    let chosen_words = [];
+    if (possible_words.length >= remaining) {
+        //get random remaining words
+        for (let i = 0; i < remaining; i++) {
+            // generate a random index in the array
+            const index = Math.floor(Math.random() * possible_words.length);
+
+            // remove the object at the random index and add it to the result array
+            chosen_words.push(possible_words.splice(index, 1)[0]);
+        }
+        return chosen_words;
+    } else {
+        chosen_words = possible_words;
+        remaining = remaining - chosen_words.length;
+        possible_words = user_document.GroupC.filter(filterFunction);
+        if (possible_words.length >= remaining) {
+            //get random remaining words
+            for (let i = 0; i < remaining; i++) {
+                // generate a random index in the array
+                const index = Math.floor(Math.random() * possible_words.length);
+
+                // remove the object at the random index and add it to the result array
+                chosen_words.push(possible_words.splice(index, 1)[0]);
+            }
+            return chosen_words;
+        } else {
+            chosen_words = chosen_words.concat(possible_words);
+            remaining = remaining - chosen_words.length;
+            possible_words = user_document.GroupD.filter(filterFunction);
+            if (possible_words.length >= remaining) {
+                //get random remaining words
+                for (let i = 0; i < remaining; i++) {
+                    // generate a random index in the array
+                    const index = Math.floor(Math.random() * possible_words.length);
+
+                    // remove the object at the random index and add it to the result array
+                    chosen_words.push(possible_words.splice(index, 1)[0]);
+                }
+                return chosen_words;
+            } else {
+                console.log('If this was printed then Asmaa`s logic was wrong');
+            }
+        }
+    }
+}
 //---------------------------------------------------------------------------------------------------------------------
 async function getUpToNumberUnseenWords(level, user_document, number, nameFilter) {
     const filter = {
@@ -271,6 +335,3 @@ async function getRandomWord(wordsCollection) {
     };
 }
 //---------------------------------------------------------------------------------------------------------------------
-
-
-
