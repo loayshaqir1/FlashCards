@@ -12,7 +12,7 @@ function connect() {
     } catch (err) {
         console.log(`Error: ${err}`);
     } finally {
-        //
+        // 
     }
 }
 
