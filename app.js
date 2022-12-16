@@ -162,10 +162,8 @@ async function getTenWordsForUser(username, level) {
     }
 }
 //---------------------------------------------------------------------------------------------------------------------
-//@@ make choosing the words from Groups B,C,D more fair
 //This function handles a corner case where the student have seen and correctly solved all of the words in madrasa's vocab.json file
 async function getRemainingWordsWithoutTimeConstraint(user_document, remaining, already_chosen_words, level) {
-    //@@ Check type of objects given to includes function and type of objects in already_chosen_words
     const filterFunction = (obj) => (obj.lesson <= level && !already_chosen_words.includes(obj));
     //Try to get remaining words from GroupB
     let possible_words = user_document.GroupB.filter(filterFunction);
@@ -338,8 +336,7 @@ async function addWordToGroup(username, word_id, groupName) {
 }
 //---------------------------------------------------------------------------------------------------------------------
 /*  @CORNER CASES@:
-- what if the user kept getting words but did not play, he just kept refreshing / sending get requests we should not treat
-the words he got as seen (solution - we need to make sure that all the words in Words_Seen array are mapped to the groups)
+
 */
 //-----------------------------------------------TESTING FUNCTIONS-----------------------------------------------------
 app.get('/', async (req, res) => {
