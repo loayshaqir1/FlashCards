@@ -65,7 +65,7 @@ async function updateWord(username, word_id, is_right) {
         await usersCollection.updateOne(filter, update);
         if (is_right === 'true') {
             //The student solved the question correctly so we add it to GroupB
-            await addWordToGroup(username, word_id, 'GroupB');
+            await addWordToGroup(username, word_id, 'GroupB', true);
         } else {
             //The student solved the question incorrectly so we add it to GroupA
             await addWordToGroup(username, word_id, 'GroupA');
@@ -75,7 +75,7 @@ async function updateWord(username, word_id, is_right) {
         if (is_right === 'true') {
             //The student solved the question correctly so we add it to the next group
             await deleteFromGroup(username, word_id, prevGroup);
-            await addWordToGroup(username, word_id, getNextGroup(prevGroup));
+            await addWordToGroup(username, word_id, getNextGroup(prevGroup), true);
         }
         else {
             //The student solved the question incorrectly so we add it to GroupA 
@@ -307,7 +307,8 @@ function addUserToCollection(username) {
         GroupB: [],
         GroupC: [],
         GroupD: [],
-        Words_Seen: []
+        Words_Seen: [],
+        correctly_solved: 0
     };
 
     // add the document to the collection
@@ -320,7 +321,7 @@ async function getLevel(id, wordsCollection) {
     return document.lesson;
 }
 //---------------------------------------------------------------------------------------------------------------------
-async function addWordToGroup(username, word_id, groupName) {
+async function addWordToGroup(username, word_id, groupName, is_correct = false) {
     // format the date as a string
     const dateString = getCurrentDate();
 
@@ -333,6 +334,12 @@ async function addWordToGroup(username, word_id, groupName) {
     };
     const filter = { 'Name': username };
     update = { $push: { [groupName]: word } };
+    if (is_correct) {
+        update = {
+            $push: { [groupName]: word },
+            $inc: { correctly_solved: 1 }
+        };
+    }
     await usersCollection.updateOne(filter, update);
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -403,3 +410,33 @@ async function getRandomWord(wordsCollection) {
     };
 }
 //---------------------------------------------------------------------------------------------------------------------
+/************************************************ Additional Features ************************************************/
+//---------------------------------------------------------------------------------------------------------------------
+app.get('/leaderboard', async (req, res) => {
+    const tenStudents = await getTopTenStudents();
+    res.json(tenStudents);
+});
+//---------------------------------------------------------------------------------------------------------------------
+async function getTopTenStudents() {
+    const documents = await usersCollection.find().sort({ correctly_solved: -1 }).limit(10).toArray();
+    const names = documents.map(doc => doc.Name);
+    const scores = documents.map(doc => doc.correctly_solved);
+    const ordered_names = await orderStudents(names, scores);
+    return ordered_names;
+}
+//---------------------------------------------------------------------------------------------------------------------
+async function orderStudents(names, scores) {
+    let ordered_names = []
+    let counter = 0;
+    await names.forEach(name => {
+        counter++;
+        ordered_names.push({
+            "Rank": counter,
+            "Name": name,
+            "score": scores[counter - 1]
+        })
+    });
+    return ordered_names;
+}
+//---------------------------------------------------------------------------------------------------------------------
+
