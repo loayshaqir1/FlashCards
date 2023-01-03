@@ -6,7 +6,7 @@
   "scripts": {
     "devstart": "nodemon app.js"
   },
-  "author": "loay",
+  "author": "Loay Shaqir & Asmaa Magdoub",
   "license": "ISC",
   "dependencies": {
     "dotenv": "^16.0.3",
