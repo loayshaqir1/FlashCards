@@ -109,14 +109,30 @@ async function addWrongAnswers(tenWords) {
     */
     let chosen_words_ids = createArrayOfIds(tenWords);
     let random_words = await getWordsFromCollectionByIds(chosen_words_ids, false);
+    var question_words = random_words.filter(function (word) {
+        return word.hebrew.includes("?");
+    });
+    random_words = random_words.filter(function (word) {
+        return !question_words.includes(word);
+    });
     tenWords.forEach(word => {
         let chosen_words = [];
-        for (let i = 0; i < process.env.WRONG_CHOICES; i++) {
-            // generate a random index in the array
-            const index = Math.floor(Math.random() * random_words.length);
+        if (word.arabic.includes("?")) {
+            for (let i = 0; i < process.env.WRONG_CHOICES; i++) {
+                // generate a random index in the array
+                const index = Math.floor(Math.random() * question_words.length);
 
-            // remove the object at the random index and add it to the result array
-            chosen_words.push(random_words.splice(index, 1)[0]['hebrew']);
+                // remove the object at the random index and add it to the result array
+                chosen_words.push(question_words.splice(index, 1)[0]['hebrew']);
+            }
+        } else {
+            for (let i = 0; i < process.env.WRONG_CHOICES; i++) {
+                // generate a random index in the array
+                const index = Math.floor(Math.random() * random_words.length);
+
+                // remove the object at the random index and add it to the result array
+                chosen_words.push(random_words.splice(index, 1)[0]['hebrew']);
+            }
         }
         word['wrong answers'] = chosen_words;
     });
