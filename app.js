@@ -318,14 +318,13 @@ async function getTenWordsForUser(username, level) {
                 let remaining = process.env.WORDS_TO_FETCH - (unseen_words.length + mergedArray.length);
                 words_without_time_constraint = await getRemainingWordsWithoutTimeConstraint(user_document, remaining, mergedArray, level);
             }
-            chosen_words_ids = createArrayOfIds(mergedArray);
+            chosen_words_ids = await createArrayOfIds(mergedArray);
             if (typeof words_without_time_constraint !== 'undefined' && words_without_time_constraint.length > 0) {
                 let without_t_c_ids = createArrayOfIds(words_without_time_constraint);
                 chosen_words_ids.concat(without_t_c_ids);
             }
-            let chosen_words = getWordsFromCollectionByIds(chosen_words_ids);
+            let chosen_words = await getWordsFromCollectionByIds(chosen_words_ids);
             let final_words = await unseen_words.concat(chosen_words);
-
             return final_words;
         }
     }
