@@ -1,6 +1,6 @@
 const dotenv = require('dotenv');
 const express = require('express');
-const cors = require('cors')
+const cors = require('cors');
 dotenv.config({ path: './config.env' });
 //---------------------------------------------------------------------------------------------------------------------
 //Connect to the database
@@ -11,7 +11,7 @@ const wordsCollection = DB.collection("words");
 //---------------------------------------------------------------------------------------------------------------------
 const app = express();
 app.use(express.json());
-app.use(cors())
+app.use(cors());
 app.listen(process.env.PORT);
 //---------------------------------------------------------------------------------------------------------------------
 app.put('/username/:name/wordId/:id/result/:isRight', async (req, res) => {
