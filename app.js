@@ -29,8 +29,8 @@ app.put('/username/:name/wordId/:id/result/:isRight', async (req, res) => {
     * Return: This function does not return anything, it just updates the database.  
     *  
     */
-    await updateWord(req.params.name, Number(req.params.id), req.params.isRight);
-    res.send("Word updated");
+    let hitrate = await updateWord(req.params.name, Number(req.params.id), req.params.isRight);
+    res.json({"LeitnersHitRate": hitrate});
 });
 //---------------------------------------------------------------------------------------------------------------------
 app.get('/username/:name/level/:user_level', async (req, res) => {
@@ -153,15 +153,21 @@ async function updateWord(username, word_id, is_right) {
 
     const filter = { 'Name': username };
     user_document = await usersCollection.findOne(filter);
+    if(user_document == null){
+        console.log("User don't exist!");
+        return;
+    }
     if (await isFirstTime(user_document, word_id) === true) {
         update = { $push: { Words_Seen: word_id } };
         await usersCollection.updateOne(filter, update);
         if (is_right === 'true') {
             //The student solved the question correctly so we add it to GroupB
             await addWordToGroup(username, word_id, 'GroupB', true);
+            return 1;
         } else {
             //The student solved the question incorrectly so we add it to GroupA
             await addWordToGroup(username, word_id, 'GroupA');
+            return 0;
         }
     } else {
         let prevGroup = await findPrevGroup(user_document, word_id);
@@ -177,6 +183,7 @@ async function updateWord(username, word_id, is_right) {
                     $set: { LeitnersHitRate: newHitRate }
                 }
             )
+            return newHitRate;
         }
         else {
             //The student solved the question incorrectly so we add it to GroupA 
@@ -190,6 +197,7 @@ async function updateWord(username, word_id, is_right) {
                     $set: { LeitnersHitRate: newHitRate }
                 }
             )
+            return newHitRate;
         }
     }
 }
