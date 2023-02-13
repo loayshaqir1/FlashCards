@@ -8,11 +8,39 @@ const server = require('./server');
 const DB = server.connect();
 const usersCollection = DB.collection("users");
 const wordsCollection = DB.collection("words");
-//---------------------------------------------------------------------------------------------------------------------
 const app = express();
 app.use(express.json());
 app.use(cors());
 app.listen(process.env.PORT);
+//---------------------------------------------------------------------------------------------------------------------
+async function getWordsArray() {
+    var random_words_global = await wordsCollection.find({}).toArray();
+    const question_words_global = await random_words_global.filter(function (word) {
+        return word.hebrew.includes("?");
+    });
+    random_words_global = await random_words_global.filter(function (word) {
+        return !question_words_global.includes(word);
+    });
+    return random_words_global
+}
+async function getQuestionWordsArray() {
+    const random_words_global = await wordsCollection.find({}).toArray();
+    const question_words_global = await random_words_global.filter(function (word) {
+        return word.hebrew.includes("?");
+    });
+    return question_words_global;
+}
+
+let random_words_global;
+let question_words_global;
+
+async function initialize_random_words() {
+    random_words_global = await Array.from(await getWordsArray());
+    question_words_global = await Array.from(await getQuestionWordsArray());
+}
+
+initialize_random_words();
+
 //---------------------------------------------------------------------------------------------------------------------
 app.put('/username/:name/wordId/:id/result/:isRight', async (req, res) => {
     /* 
@@ -30,7 +58,7 @@ app.put('/username/:name/wordId/:id/result/:isRight', async (req, res) => {
     *  
     */
     let hitrate = await updateWord(req.params.name, Number(req.params.id), req.params.isRight);
-    res.json({"LeitnersHitRate": hitrate});
+    res.json({ "LeitnersHitRate": hitrate });
 });
 //---------------------------------------------------------------------------------------------------------------------
 app.get('/username/:name/level/:user_level', async (req, res) => {
@@ -108,13 +136,8 @@ async function addWrongAnswers(tenWords) {
     *
     */
     let chosen_words_ids = createArrayOfIds(tenWords);
-    let random_words = await getWordsFromCollectionByIds(chosen_words_ids, false);
-    var question_words = random_words.filter(function (word) {
-        return word.hebrew.includes("?");
-    });
-    random_words = random_words.filter(function (word) {
-        return !question_words.includes(word);
-    });
+    let random_words = await random_words_global.filter(word => !chosen_words_ids.includes(word.id));
+    let question_words = await question_words_global.filter(word => !chosen_words_ids.includes(word.id));
     tenWords.forEach(word => {
         let chosen_words = [];
         if (word.arabic.includes("?")) {
@@ -153,21 +176,39 @@ async function updateWord(username, word_id, is_right) {
 
     const filter = { 'Name': username };
     user_document = await usersCollection.findOne(filter);
-    if(user_document == null){
+    if (user_document == null) {
         console.log("User don't exist!");
         return;
     }
     if (await isFirstTime(user_document, word_id) === true) {
-        update = { $push: { Words_Seen: word_id } };
-        await usersCollection.updateOne(filter, update);
+        // update = { $push: { Words_Seen: word_id } };
+        // await usersCollection.updateOne(filter, update);
         if (is_right === 'true') {
             //The student solved the question correctly so we add it to GroupB
             await addWordToGroup(username, word_id, 'GroupB', true);
-            return 1;
+            let newHitRate = (user_document.leitner_correctly_answered + 1) / (user_document.leitner_times_appeared + 1)
+            usersCollection.updateOne(
+                filter,
+                {
+                    $inc: { leitner_correctly_answered: 1, leitner_times_appeared: 1 },
+                    $set: { LeitnersHitRate: newHitRate },
+                    $push: { Words_Seen: word_id }
+                }
+            )
+            return newHitRate;
         } else {
             //The student solved the question incorrectly so we add it to GroupA
             await addWordToGroup(username, word_id, 'GroupA');
-            return 0;
+            let newHitRate = (user_document.leitner_correctly_answered) / (user_document.leitner_times_appeared + 1)
+            usersCollection.updateOne(
+                filter,
+                {
+                    $inc: { leitner_times_appeared: 1 },
+                    $set: { LeitnersHitRate: newHitRate },
+                    $push: { Words_Seen: word_id }
+                }
+            )
+            return newHitRate;
         }
     } else {
         let prevGroup = await findPrevGroup(user_document, word_id);
@@ -292,9 +333,10 @@ async function getWordsByLevel(level) {
     /*
     * This function returns all the words in the wordsCollection whose lesson is <= given level.
     */
-    const filter = { lesson: { $lte: level } };
-    const cursor = await wordsCollection.find(filter);
-    let possible_words = await cursor.toArray();
+    const filterFunction = (obj) => (obj.lesson <= level);
+
+    let possible_words = await random_words_global.filter(filterFunction);
+    await possible_words.concat(await question_words_global.filter(filterFunction));
     return possible_words;
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -424,8 +466,9 @@ async function getUpToNumberUnseenWords(level, user_document, number) {
         ]
     };
     // Use the filter to retrieve a cursor to the matching documents in the "wordsCollection"
-    const cursor = await wordsCollection.find(filter);
-    let possible_words = await cursor.toArray();
+    const filterFunction = (obj) => (obj.lesson <= level && !user_document.Words_Seen.includes(obj.id));
+    let possible_words = await random_words_global.filter(filterFunction);
+    await possible_words.concat(await question_words_global.filter(filterFunction));
     // If the number of possible words is less than or equal to the desired number, return the entire array
     if (possible_words.length <= number) return possible_words;
     else {
