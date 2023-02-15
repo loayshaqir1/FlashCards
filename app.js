@@ -336,7 +336,7 @@ async function getWordsByLevel(level) {
     const filterFunction = (obj) => (obj.lesson <= level);
 
     let possible_words = await random_words_global.filter(filterFunction);
-    await possible_words.concat(await question_words_global.filter(filterFunction));
+    possible_words = await possible_words.concat(await question_words_global.filter(filterFunction));
     return possible_words;
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -360,6 +360,7 @@ async function getTenWordsForUser(username, level) {
     if (user_document != null) {
         //try to get 10 words based on the principals of Leitner's system.
         let mergedArray = await getWordsFromGroups(level, user_document);
+        console.log(mergedArray.length)
         if (mergedArray.length >= process.env.WORDS_TO_FETCH) {
 
             //try to choose 5 words that the student haven't seen
@@ -378,16 +379,16 @@ async function getTenWordsForUser(username, level) {
         else {
             let unseen_words = await getUpToNumberUnseenWords(level, user_document, process.env.WORDS_TO_FETCH - mergedArray.length, filter);
             let words_without_time_constraint = []
-
             //Check if there is no new words left to show.
             if (unseen_words.length + mergedArray.length < process.env.WORDS_TO_FETCH) {
                 let remaining = process.env.WORDS_TO_FETCH - (unseen_words.length + mergedArray.length);
                 words_without_time_constraint = await getRemainingWordsWithoutTimeConstraint(user_document, remaining, mergedArray, level);
             }
-            chosen_words_ids = await createArrayOfIds(mergedArray);
+            console.log(words_without_time_constraint)
+            let chosen_words_ids = await createArrayOfIds(mergedArray);
             if (typeof words_without_time_constraint !== 'undefined' && words_without_time_constraint.length > 0) {
-                let without_t_c_ids = createArrayOfIds(words_without_time_constraint);
-                chosen_words_ids.concat(without_t_c_ids);
+                let without_t_c_ids = await createArrayOfIds(words_without_time_constraint);
+                chosen_words_ids = chosen_words_ids.concat(without_t_c_ids);
             }
             let chosen_words = await getWordsFromCollectionByIds(chosen_words_ids);
             let final_words = await unseen_words.concat(chosen_words);
@@ -468,7 +469,7 @@ async function getUpToNumberUnseenWords(level, user_document, number) {
     // Use the filter to retrieve a cursor to the matching documents in the "wordsCollection"
     const filterFunction = (obj) => (obj.lesson <= level && !user_document.Words_Seen.includes(obj.id));
     let possible_words = await random_words_global.filter(filterFunction);
-    await possible_words.concat(await question_words_global.filter(filterFunction));
+    possible_words = await possible_words.concat(await question_words_global.filter(filterFunction));
     // If the number of possible words is less than or equal to the desired number, return the entire array
     if (possible_words.length <= number) return possible_words;
     else {
