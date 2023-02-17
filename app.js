@@ -139,25 +139,25 @@ async function addWrongAnswers(tenWords) {
     let random_words = await random_words_global.filter(word => !chosen_words_ids.includes(word.id));
     let question_words = await question_words_global.filter(word => !chosen_words_ids.includes(word.id));
     tenWords.forEach(word => {
-        let chosen_words = [];
+        let chosen_words = new Set();
         if (word.arabic.includes("?")) {
-            for (let i = 0; i < process.env.WRONG_CHOICES; i++) {
+            while (chosen_words.size < process.env.WRONG_CHOICES) {
                 // generate a random index in the array
                 const index = Math.floor(Math.random() * question_words.length);
 
                 // remove the object at the random index and add it to the result array
-                chosen_words.push(question_words.splice(index, 1)[0]['hebrew']);
+                chosen_words.add(question_words.splice(index, 1)[0]['hebrew']);
             }
         } else {
-            for (let i = 0; i < process.env.WRONG_CHOICES; i++) {
+            while (chosen_words.size < process.env.WRONG_CHOICES) {
                 // generate a random index in the array
                 const index = Math.floor(Math.random() * random_words.length);
 
                 // remove the object at the random index and add it to the result array
-                chosen_words.push(random_words.splice(index, 1)[0]['hebrew']);
+                chosen_words.add(random_words.splice(index, 1)[0]['hebrew']);
             }
         }
-        word['wrong answers'] = chosen_words;
+        word['wrong answers'] = [...chosen_words];
     });
 }
 //---------------------------------------------------------------------------------------------------------------------
