@@ -195,10 +195,10 @@ async function updateWord(username, word_id, is_right) {
                     $push: { Words_Seen: word_id }
                 }
             )
-            return newHitRate;
+            return 1;
         } else {
             //The student solved the question incorrectly so we add it to GroupA
-            await addWordToGroup(username, word_id, 'GroupA');
+            await addWordToGroup(username, word_id, 'GroupA', false);
             let newHitRate = (user_document.leitner_correctly_answered) / (user_document.leitner_times_appeared + 1)
             usersCollection.updateOne(
                 filter,
@@ -208,15 +208,18 @@ async function updateWord(username, word_id, is_right) {
                     $push: { Words_Seen: word_id }
                 }
             )
-            return newHitRate;
+            return 0;
         }
     } else {
         let prevGroup = await findPrevGroup(user_document, word_id);
+        let prevGroupArray = await getGroupArr(user_document, prevGroup);
+        let prevDetails = await getPrevDetails(user_document, word_id, prevGroupArray);
         if (is_right === 'true') {
             //The student solved the question correctly so we add it to the next group
             await deleteFromGroup(username, word_id, prevGroup);
-            await addWordToGroup(username, word_id, getNextGroup(prevGroup), true);
-            let newHitRate = (user_document.leitner_correctly_answered + 1) / (user_document.leitner_times_appeared + 1)
+            await addWordToGroup(username, word_id, getNextGroup(prevGroup), true, prevDetails);
+            let per_word_hitrate = (prevDetails[0] + 1) / (prevDetails[1] + 1);
+            let newHitRate = (user_document.correctly_answered + 1) / (user_document.times_appeared + 1);
             usersCollection.updateOne(
                 filter,
                 {
@@ -224,12 +227,13 @@ async function updateWord(username, word_id, is_right) {
                     $set: { LeitnersHitRate: newHitRate }
                 }
             )
-            return newHitRate;
+            return per_word_hitrate;
         }
         else {
             //The student solved the question incorrectly so we add it to GroupA 
             await deleteFromGroup(username, word_id, prevGroup);
-            await addWordToGroup(username, word_id, 'GroupA');
+            await addWordToGroup(username, word_id, 'GroupA', false, prevDetails);
+            let per_word_hitrate = (prevDetails[0]) / (prevDetails[1] + 1);
             let newHitRate = (user_document.leitner_correctly_answered) / (user_document.leitner_times_appeared + 1)
             usersCollection.updateOne(
                 filter,
@@ -238,9 +242,16 @@ async function updateWord(username, word_id, is_right) {
                     $set: { LeitnersHitRate: newHitRate }
                 }
             )
-            return newHitRate;
+            return per_word_hitrate;
         }
     }
+}
+//---------------------------------------------------------------------------------------------------------------------
+async function getGroupArr(user_document, prev_group) {
+    if (prev_group === 'GroupA') return user_document.GroupA;
+    else if (prev_group === 'GroupB') return user_document.GroupB;
+    else if (prev_group === 'GroupC') return user_document.GroupC;
+    else if (prev_group === 'GroupD') return user_document.GroupD;
 }
 //---------------------------------------------------------------------------------------------------------------------
 function getNextGroup(prev_group) {
@@ -266,6 +277,22 @@ async function deleteFromGroup(username, word_id, groupName) {
     // Construct an update object to remove the word with the specified "word_id" from the group with the specified "groupName"
     update = { $pull: { [groupName]: { id: word_id } } };
     await usersCollection.updateOne(filter, update);
+}
+//---------------------------------------------------------------------------------------------------------------------
+async function getPrevDetails(user_document, word_id, group) {
+    let prevTimesAppeared = 0;
+    let prevCorrectlyAnswered = 0;
+    try {
+        await group.forEach(word => {
+            if (word.id === word_id) {
+                prevTimesAppeared = word.times_appeared;
+                prevCorrectlyAnswered = word.correctly_answered;
+                throw new Error('something');
+            }
+        });
+    } catch (err) {
+        return [prevCorrectlyAnswered, prevTimesAppeared];
+    }
 }
 //---------------------------------------------------------------------------------------------------------------------
 async function findPrevGroup(user_document, word_id) {
@@ -360,7 +387,6 @@ async function getTenWordsForUser(username, level) {
     if (user_document != null) {
         //try to get 10 words based on the principals of Leitner's system.
         let mergedArray = await getWordsFromGroups(level, user_document);
-        console.log(mergedArray.length)
         if (mergedArray.length >= process.env.WORDS_TO_FETCH) {
 
             //try to choose 5 words that the student haven't seen
@@ -384,7 +410,6 @@ async function getTenWordsForUser(username, level) {
                 let remaining = process.env.WORDS_TO_FETCH - (unseen_words.length + mergedArray.length);
                 words_without_time_constraint = await getRemainingWordsWithoutTimeConstraint(user_document, remaining, mergedArray, level);
             }
-            console.log(words_without_time_constraint)
             let chosen_words_ids = await createArrayOfIds(mergedArray);
             if (typeof words_without_time_constraint !== 'undefined' && words_without_time_constraint.length > 0) {
                 let without_t_c_ids = await createArrayOfIds(words_without_time_constraint);
@@ -577,7 +602,7 @@ async function getLevel(id, wordsCollection) {
     return document.lesson;
 }
 //---------------------------------------------------------------------------------------------------------------------
-async function addWordToGroup(username, word_id, groupName, is_correct = false) {
+async function addWordToGroup(username, word_id, groupName, is_correct = false, prevDetails = []) {
     // Format the current date as a string
     const dateString = getCurrentDate();
 
@@ -585,11 +610,24 @@ async function addWordToGroup(username, word_id, groupName, is_correct = false) 
     const level = await getLevel(word_id, wordsCollection);
 
     // Create a new object representing the word
-    let word = {
-        'id': word_id,
-        'lesson': level,
-        'Date Entered': dateString
-    };
+    let word = {};
+    if (prevDetails.length > 0) {
+        word = {
+            'id': word_id,
+            'lesson': level,
+            'Date Entered': dateString,
+            'times_appeared': (prevDetails[1] + 1),
+            'correctly_answered': (prevDetails[0] + (is_correct ? 1 : 0))
+        };
+    } else {
+        word = {
+            'id': word_id,
+            'lesson': level,
+            'Date Entered': dateString,
+            'times_appeared': 1,
+            'correctly_answered': (is_correct ? 1 : 0)
+        };
+    }
 
     // Construct a filter to find the document with the specified "username"
     const filter = { 'Name': username };
