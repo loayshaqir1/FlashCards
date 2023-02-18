@@ -97,12 +97,12 @@ app.get('/username/:name/level/:user_level/without_wrong_answers', async (req, r
     res.json(tenWords);
 });
 //---------------------------------------------------------------------------------------------------------------------
-function createArrayOfIds(words_array) {
+async function createArrayOfIds(words_array) {
     /* 
     * This function takes an array of word objects and returns an array that contains the id's of those words.
     */
     let words_ids = []
-    words_array.forEach(word => {
+    await words_array.forEach(word => {
         words_ids.push(word.id);
     })
     return words_ids;
@@ -135,10 +135,10 @@ async function addWrongAnswers(tenWords) {
     * These incorrect answers are randomly generated and unique to each question.
     *
     */
-    let chosen_words_ids = createArrayOfIds(tenWords);
+    let chosen_words_ids = await createArrayOfIds(tenWords);
     let random_words = await random_words_global.filter(word => !chosen_words_ids.includes(word.id));
     let question_words = await question_words_global.filter(word => !chosen_words_ids.includes(word.id));
-    tenWords.forEach(word => {
+    await tenWords.forEach(word => {
         let chosen_words = new Set();
         if (word.arabic.includes("?")) {
             while (chosen_words.size < process.env.WRONG_CHOICES) {
@@ -186,7 +186,7 @@ async function updateWord(username, word_id, is_right) {
         if (is_right === 'true') {
             //The student solved the question correctly so we add it to GroupB
             await addWordToGroup(username, word_id, 'GroupB', true);
-            let newHitRate = (user_document.leitner_correctly_answered + 1) / (user_document.leitner_times_appeared + 1)
+            let newHitRate = await (user_document.leitner_correctly_answered + 1) / (user_document.leitner_times_appeared + 1);
             usersCollection.updateOne(
                 filter,
                 {
@@ -199,7 +199,7 @@ async function updateWord(username, word_id, is_right) {
         } else {
             //The student solved the question incorrectly so we add it to GroupA
             await addWordToGroup(username, word_id, 'GroupA', false);
-            let newHitRate = (user_document.leitner_correctly_answered) / (user_document.leitner_times_appeared + 1)
+            let newHitRate = await (user_document.leitner_correctly_answered) / (user_document.leitner_times_appeared + 1);
             usersCollection.updateOne(
                 filter,
                 {
@@ -218,8 +218,8 @@ async function updateWord(username, word_id, is_right) {
             //The student solved the question correctly so we add it to the next group
             await deleteFromGroup(username, word_id, prevGroup);
             await addWordToGroup(username, word_id, getNextGroup(prevGroup), true, prevDetails);
-            let per_word_hitrate = (prevDetails[0] + 1) / (prevDetails[1] + 1);
-            let newHitRate = (user_document.correctly_answered + 1) / (user_document.times_appeared + 1);
+            let per_word_hitrate = await (prevDetails[0] + 1) / (prevDetails[1] + 1);
+            let newHitRate = await (user_document.leitner_correctly_answered + 1) / (user_document.leitner_times_appeared + 1);
             usersCollection.updateOne(
                 filter,
                 {
@@ -233,8 +233,8 @@ async function updateWord(username, word_id, is_right) {
             //The student solved the question incorrectly so we add it to GroupA 
             await deleteFromGroup(username, word_id, prevGroup);
             await addWordToGroup(username, word_id, 'GroupA', false, prevDetails);
-            let per_word_hitrate = (prevDetails[0]) / (prevDetails[1] + 1);
-            let newHitRate = (user_document.leitner_correctly_answered) / (user_document.leitner_times_appeared + 1)
+            let per_word_hitrate = await (prevDetails[0]) / (prevDetails[1] + 1);
+            let newHitRate = await (user_document.leitner_correctly_answered) / (user_document.leitner_times_appeared + 1);
             usersCollection.updateOne(
                 filter,
                 {
@@ -252,6 +252,7 @@ async function getGroupArr(user_document, prev_group) {
     else if (prev_group === 'GroupB') return user_document.GroupB;
     else if (prev_group === 'GroupC') return user_document.GroupC;
     else if (prev_group === 'GroupD') return user_document.GroupD;
+    console.log("Something is wrong in GetGroupArr!");
 }
 //---------------------------------------------------------------------------------------------------------------------
 function getNextGroup(prev_group) {
@@ -337,7 +338,7 @@ async function getWordsFromGroups(level, user_document) {
     let wordsFromB = await getPossibleWordsFromDatedGroups(level, user_document.GroupB, process.env.WEEK);
     let wordsFromC = await getPossibleWordsFromDatedGroups(level, user_document.GroupC, 2 * process.env.WEEK);
     let wordsFromD = await getPossibleWordsFromDatedGroups(level, user_document.GroupD, process.env.MONTH);
-    let mergedArray = wordsFromA.concat(wordsFromB).concat(wordsFromC).concat(wordsFromD);
+    let mergedArray = await wordsFromA.concat(wordsFromB).concat(wordsFromC).concat(wordsFromD);
     return mergedArray;
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -511,7 +512,7 @@ async function getPossibleWordsFromA(level, user_document) {
 
     // Use the "filter" method on the "GroupA" array, passing in the "filterFunction" as an argument
     // This will return a new array containing only the elements of "GroupA" that pass the filter
-    const possible_words = user_document.GroupA.filter(filterFunction);
+    const possible_words = await user_document.GroupA.filter(filterFunction);
 
     // Return the resulting array of possible words
     return possible_words;
@@ -527,13 +528,13 @@ async function getPossibleWordsFromDatedGroups(level, groupArray, minDays) {
 
     // Use the "filter" method on the "groupArray" array, passing in the "filterFunction" as an argument
     // This will return a new array containing only the elements of "groupArray" that pass the filter
-    const possible_words = groupArray.filter(filterFunction);
+    const possible_words = await groupArray.filter(filterFunction);
 
     // Initialize an empty array to store the resulting words
     let result = []
 
     // Iterate over each word in the "possible_words" array
-    possible_words.forEach(document => {
+    await possible_words.forEach(document => {
         // Get the current date and the date the word was added to the group
         const date1 = todaysDate;
         const date2 = document['Date Entered'];
