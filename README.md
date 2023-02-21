@@ -8,7 +8,7 @@ Returns the list of words for the given user at the specified level.
 
 `GET /username/{name}/level/{user_level}/without_wrong_answers`
 
-Returns the list of words for the given user at the specified level, excluding those that were answered incorrectly.
+Returns the list of words for the given user at the specified level, excluding the wrong answers array.
 
 `PUT /username/{name}/wordId/{id}/result/{isRight}`
 
